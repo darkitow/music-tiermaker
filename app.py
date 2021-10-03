@@ -27,21 +27,23 @@ config = {
     'artist_singles':True
 }
 help_text = '''
-    CURRENT COMMANDS
+    COMMANDS
 
-    search              searchs on spotify based on query
+    search              search on spotify based on query
                         search <type> "query"
                         types: album, artist
 
-    album               gets album from spotify link
+    album               get album from spotify link
                         album "link"
 
-    artist               gets artist from spotify link
+    artist              get artist from spotify link
                         artist "link"
 
-    config              changes option, if option not provided see current configs
+    playlist            get playlist from spotify link
+                        playlist "link"
+
+    config              change <option>, if option not provided see current configs
                         config <option>
-                        option: remove_tags, artist_singles
 
     help                displays help
     '''
@@ -121,7 +123,7 @@ def getartist(artist_id):
     if not os.path.exists(artist_dir):
         os.makedirs(artist_dir)
     os.chdir(artist_dir)
-    saveImg(artist_pfp,'artist_photo')
+    saveImg(artist_pfp,'artist_pfp')
 
     result = sp.artist_albums(artist_id, album_type='album') ; os.remove('.cache')
     for album in tqdm(result['items'], bar_format=bar_format):
@@ -138,6 +140,21 @@ def getartist(artist_id):
         for single in tqdm(result['items'], bar_format=bar_format):
             getalbum(single['uri'],False)
         os.chdir('../')
+    os.chdir('../')
+
+def getplaylist(playlist_id):
+    result = sp.playlist(playlist_id) ; os.remove('.cache')
+    playlist_name = result['name']
+    playlist_cover = result['images'][0]['url']
+
+    playlist_dir = f'./{slugify(playlist_name)}'
+    if not os.path.exists(playlist_dir):
+        os.makedirs(playlist_dir)
+    os.chdir(playlist_dir)
+    saveImg(playlist_cover,'playlist_cover')
+
+    for track in tqdm(result['tracks']['items'], bar_format=bar_format):
+        drawImg(track['track']['name'], track['track']['album']['images'][0]['url'])
     os.chdir('../')
 
 def search(nature,q):
@@ -190,6 +207,7 @@ def main():
     commands = {
         'album':getalbum,
         'artist':getartist,
+        'playlist':getplaylist,
         'search':search,
         'config':configs,
         'help':helper
