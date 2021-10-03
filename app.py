@@ -24,7 +24,8 @@ class colors:
 
 config = {
     'remove_tags':True,
-    'artist_singles':True
+    'artist_singles':True,
+    'only_cover':False
 }
 help_text = '''
     COMMANDS
@@ -103,6 +104,8 @@ def getalbum(album_id,create_dir=True):
     result = sp.album(album_id) ; os.remove('.cache')
     album_name = result['name']
     album_cover = result['images'][0]['url']
+    
+    if config['only_cover'] == True: saveImg(album_cover,slugify(album_name)) ; return
 
     if create_dir == True:
         album_dir = f'./{slugify(album_name)}'
