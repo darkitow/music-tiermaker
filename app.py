@@ -24,8 +24,9 @@ class colors:
 
 config = {
     'remove_tags':True,
-    'artist_singles':True,
-    'only_cover':False
+    'artist_singles':False,
+    'only_cover':False,
+    'choose_albums':True
 }
 help_text = '''
     COMMANDS
@@ -128,9 +129,30 @@ def getartist(artist_id):
     os.chdir(artist_dir)
     saveImg(artist_pfp,'artist_pfp')
 
-    result = sp.artist_albums(artist_id, album_type='album') ; os.remove('.cache')
-    for album in tqdm(result['items'], bar_format=bar_format):
-        getalbum(album['uri'])
+    result = sp.artist_albums(artist_id, limit=50, album_type='album') ; os.remove('.cache')
+
+    ignore_album = list()
+    if config['choose_albums'] == True:
+        for i,album in enumerate(result['items']):
+            if album['name'] in list(i['name'] for i in result['items'][:i]):
+                ignore_album.append(album['uri'])
+        while True:
+            for i,album in enumerate(result['items']):
+                if album['uri'] in ignore_album: color = colors.RED
+                else: color = colors.GREEN
+                print(f'{i+1}. {color}{album["name"]} ({album["release_date"]}){colors.END}')
+            print('0. Confirm')
+            try:
+                opt = int(input())
+                album_opt = result['items'][opt-1]['uri']
+                if opt == 0: break
+                elif album_opt in ignore_album: ignore_album.remove(album_opt)
+                else: ignore_album.append(album_opt)
+            except: pass
+
+
+    for album in tqdm(list(i['uri'] for i in result['items'] if i['uri'] not in ignore_album), bar_format=bar_format):
+        getalbum(album)
     
     if config['artist_singles'] == True:
         # why the fuck i doesn't get all the singles is beyond me
@@ -139,7 +161,7 @@ def getartist(artist_id):
             os.makedirs(singles_dir)
         os.chdir(singles_dir)
         
-        result = sp.artist_albums(artist_id, album_type='single') ; os.remove('.cache')
+        result = sp.artist_albums(artist_id, limit=50, album_type='single') ; os.remove('.cache')
         for single in tqdm(result['items'], bar_format=bar_format):
             getalbum(single['uri'],False)
         os.chdir('../')
@@ -184,7 +206,7 @@ def search(nature,q):
                 elif nature == 'artist': getartist(options[opt])
                 return
             elif opt == 0: return
-        except: print('invalid option') ; pass
+        except Exception as e: print(e) ; print('invalid option') ; pass
 
 def configs(opt=None):
     if opt in config:
