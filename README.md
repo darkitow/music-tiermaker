@@ -1,5 +1,6 @@
 # music-tiermaker
-Simple program that uses spotify API to create music images for tierlists or whatever you want
+Simple program that uses spotify API to create music images for tierlists or whatever you want </br>
+also, this project is just for learning and my personal use, so i'll probably do a lot of dumb shit to it, i'm going to try to maintain a stable main tho
 
 ### How to use
 
