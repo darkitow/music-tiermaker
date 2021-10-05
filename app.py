@@ -26,7 +26,8 @@ config = {
     'remove_tags':True,
     'artist_singles':False,
     'only_cover':False,
-    'choose_albums':True
+    'choose_albums':True,
+    'artist_subfolders':True
 }
 help_text = '''
     COMMANDS
@@ -82,6 +83,7 @@ def slugify(value, allow_unicode=False):
 
 def drawImg(text,img_link):
         saveImg(img_link)
+        index = f'{global_index}-'
         if config['remove_tags'] == True: text = removeTags(text)
         img = Image.open('./temp.png')
         fileName = slugify(text)
@@ -98,15 +100,17 @@ def drawImg(text,img_link):
         text = textwrap.fill(text=text, width=max_char_count)
         draw = ImageDraw.Draw(img)
         draw.multiline_text(xy=(img.size[0]/2, img.size[1]/2), text=text, font=font, fill='white', anchor='mm', align='center',stroke_width=int(fontSize/10), stroke_fill='black')
-        img.save(f'./{fileName}.png')
+        img.save(f'./{index}{fileName}.png')
         os.remove('temp.png')
 
 def getalbum(album_id,create_dir=True):
+    global global_index
     result = sp.album(album_id) ; os.remove('.cache')
     album_name = result['name']
     album_cover = result['images'][0]['url']
     
     if config['only_cover'] == True: saveImg(album_cover,slugify(album_name)) ; return
+    if config['artist_subfolders'] == False: create_dir = False
 
     if create_dir == True:
         album_dir = f'./{slugify(album_name)}'
@@ -115,7 +119,7 @@ def getalbum(album_id,create_dir=True):
         os.chdir(album_dir)
     
     for track in tqdm(result['tracks']['items'], bar_format=bar_format, leave=False):
-        drawImg(track['name'], album_cover)
+        drawImg(track['name'], album_cover) ; global_index += 1
     if create_dir == True: os.chdir('../') 
 
 def getartist(artist_id):
@@ -156,15 +160,16 @@ def getartist(artist_id):
     
     if config['artist_singles'] == True:
         # why the fuck i doesn't get all the singles is beyond me
-        singles_dir = './.singles'
-        if not os.path.exists(singles_dir):
-            os.makedirs(singles_dir)
-        os.chdir(singles_dir)
+        if config['artist_subfolders'] == True:
+            singles_dir = './.singles'
+            if not os.path.exists(singles_dir):
+                os.makedirs(singles_dir)
+            os.chdir(singles_dir)
         
         result = sp.artist_albums(artist_id, limit=50, album_type='single') ; os.remove('.cache')
         for single in tqdm(result['items'], bar_format=bar_format):
             getalbum(single['uri'],False)
-        os.chdir('../')
+        if config['artist_subfolders'] == True: os.chdir('../')
     os.chdir('../')
 
 def getplaylist(playlist_id):
@@ -229,6 +234,7 @@ def helper(arg=None):
     if arg == None: print(help_text)
         
 def main():
+    global global_index
     commands = {
         'album':getalbum,
         'artist':getartist,
@@ -238,6 +244,7 @@ def main():
         'help':helper
     }
     while True:
+        global_index = 1
         user_input = shlex.split(input('> '))
         if user_input[0] in commands:
             try: commands[user_input[0]](*user_input[1:])
