@@ -3,10 +3,7 @@ Simple program that uses spotify API to create music images for tierlists or wha
 also, this project is just for learning and my personal use, so i'll probably do a lot of dumb shit to it, i'm going to try to maintain a stable main tho
 
 ### How to use
-
-* use `<type> "link"` to get images from that type </br> types: album, artist, playlist </br>
-* use `search <type> "query"` to search from that type on spotify </br> types: album, artist </br>
-* use `config <config>` to change options </br>
+just type ```help```
 
 ### Examples
 <p align='left'>
