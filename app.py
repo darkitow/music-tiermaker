@@ -1,5 +1,4 @@
-# C:\Python27 python
-import os ; import sys ; import shlex
+import os ; import sys ; import shlex ; import math
 parent_dir = os.path.abspath(os.path.dirname(__file__))
 vendor_dir = os.path.join(parent_dir, 'vendor')
 sys.path.append(vendor_dir)
@@ -27,35 +26,30 @@ config = {
     'artist_singles':False,
     'only_cover':False,
     'choose_albums':True,
-    'artist_subfolders':True
-}
+    'artist_subfolders':False}
+
 help_text = '''
     COMMANDS
 
     search              search on spotify based on query
-                        search <type> "query"
+                        search <type> 'query'
                         types: album, artist
 
     album               get album from spotify link
-                        album "link"
+                        album 'link'
 
     artist              get artist from spotify link
-                        artist "link"
+                        artist 'link'
 
     playlist            get playlist from spotify link
-                        playlist "link"
+                        playlist 'link'
 
-    config              change <option>, if option not provided see current configs
-                        config <option>
+    config              config settings
+                        config <option> - to toggle option
+                        config - to see all configs
 
     help                displays help
     '''
-
-def saveImg(link,name='temp',ext='.png'):
-    r = requests.get(link, stream=True)
-    if r.status_code == 200:
-        with open('./'+name+ext,'wb') as f:
-            f.write(r.content)
 
 def removeTags(value):
     str_copy = value.lower()
@@ -81,36 +75,42 @@ def slugify(value, allow_unicode=False):
     value = re.sub(r'[^\w\s-]', '', value.lower())
     return re.sub(r'[-\s]+', '-', value).strip('-_')
 
-def drawImg(text,img_link):
-        saveImg(img_link)
-        index = f'{global_index}-'
-        if config['remove_tags'] == True: text = removeTags(text)
-        img = Image.open('./temp.png')
-        fileName = slugify(text)
-        # text fitting settings
-        fontSize = 100
-        while True:
-            fontSize -= 4
-            font = ImageFont.truetype(f'{parent_dir}/vendor/SourceCodePro-Bold.ttf',fontSize)
-            avg_char_width = sum(font.getsize(char)[0] for char in ascii_letters) / len(ascii_letters)
-            max_char_count = int((img.size[0] * .95)/avg_char_width)
-            if max_char_count >= 10: break
+def saveImg(link,name):
+    r = session.get(link, stream=True)
+    if r.status_code == 200:
+        with open('./'+name,'wb') as f:
+            f.write(r.content)
 
-        # draw image, save, and remove cache
-        text = textwrap.fill(text=text, width=max_char_count)
-        draw = ImageDraw.Draw(img)
-        draw.multiline_text(xy=(img.size[0]/2, img.size[1]/2), text=text, font=font, fill='white', anchor='mm', align='center',stroke_width=int(fontSize/10), stroke_fill='black')
-        img.save(f'./{index}{fileName}.png')
-        os.remove('temp.png')
+def drawImg(img,text):
+    index = ''
+    if not config['artist_subfolders']:
+        if song_index[0] > 0:
+            for i in range(0,2):
+                index += f'{str(song_index[i]).zfill(math.floor(math.log10(lead_zero[i]))+1)}-'
+    if config['remove_tags'] == True: text = removeTags(text)
+    
+    fileName = slugify(text)
+    # text fitting settings
+    fontSize = 100
+    while True:
+        fontSize -= 4
+        font = ImageFont.truetype(f'{parent_dir}/vendor/SourceCodePro-Bold.ttf',fontSize)
+        avg_char_width = sum(font.getsize(char)[0] for char in ascii_letters) / len(ascii_letters)
+        max_char_count = int((img.size[0] * .95)/avg_char_width)
+        if max_char_count >= 10: break
+    # draw image and save
+    text = textwrap.fill(text=text, width=max_char_count)
+    draw = ImageDraw.Draw(img)
+    draw.multiline_text(xy=(img.size[0]/2, img.size[1]/2), text=text, font=font, fill='white', anchor='mm', align='center',stroke_width=int(fontSize/10), stroke_fill='black')
+    img.save(f'./{index}{fileName}.png')
 
 def getalbum(album_id,create_dir=True):
-    global global_index
+    global song_index, lead_zero
     result = sp.album(album_id) ; os.remove('.cache')
     album_name = result['name']
     album_cover = result['images'][0]['url']
     
-    if config['only_cover'] == True: saveImg(album_cover,slugify(album_name)) ; return
-    if config['artist_subfolders'] == False: create_dir = False
+    if config['only_cover'] == True: saveImg(album_cover,f'{slugify(album_name)}.png') ; return
 
     if create_dir == True:
         album_dir = f'./{slugify(album_name)}'
@@ -118,11 +118,17 @@ def getalbum(album_id,create_dir=True):
             os.makedirs(album_dir)
         os.chdir(album_dir)
     
+    saveImg(album_cover, 'temp.png')
+    img = Image.open('temp.png')
+    lead_zero[1] = len(result['tracks']['items'])
     for track in tqdm(result['tracks']['items'], bar_format=bar_format, leave=False):
-        drawImg(track['name'], album_cover) ; global_index += 1
+        song_index[1] += 1
+        drawImg(img.copy(), track['name'])
+    os.remove('temp.png')
     if create_dir == True: os.chdir('../') 
 
 def getartist(artist_id):
+    global song_index, lead_zero
     result = sp.artist(artist_id) ; os.remove('.cache')
     artist_name = result['name']
     artist_pfp = result['images'][0]['url']
@@ -131,7 +137,7 @@ def getartist(artist_id):
     if not os.path.exists(artist_dir):
         os.makedirs(artist_dir)
     os.chdir(artist_dir)
-    saveImg(artist_pfp,'artist_pfp')
+    saveImg(artist_pfp,'artist_pfp.png')
 
     result = sp.artist_albums(artist_id, limit=50, album_type='album') ; os.remove('.cache')
 
@@ -154,18 +160,24 @@ def getartist(artist_id):
                 else: ignore_album.append(album_opt)
             except: pass
 
-
-    for album in tqdm(list(i['uri'] for i in result['items'] if i['uri'] not in ignore_album), bar_format=bar_format):
-        getalbum(album)
+    selected_albums = list(i['uri'] for i in result['items'] if i['uri'] not in ignore_album)
+    lead_zero[0] = len(selected_albums)
+    if config['artist_singles']: lead_zero[0] += 1
+    for album in tqdm(selected_albums, bar_format=bar_format):
+        song_index = [song_index[0]+1,0]
+        if config['artist_subfolders']: getalbum(album)
+        else: getalbum(album,False)
     
     if config['artist_singles'] == True:
-        # why the fuck i doesn't get all the singles is beyond me
+        song_index = [song_index[0]+1,0]
+
         if config['artist_subfolders'] == True:
             singles_dir = './.singles'
             if not os.path.exists(singles_dir):
                 os.makedirs(singles_dir)
             os.chdir(singles_dir)
         
+        # spotify api has a 50 song limit, dont know what i can do
         result = sp.artist_albums(artist_id, limit=50, album_type='single') ; os.remove('.cache')
         for single in tqdm(result['items'], bar_format=bar_format):
             getalbum(single['uri'],False)
@@ -181,16 +193,20 @@ def getplaylist(playlist_id):
     if not os.path.exists(playlist_dir):
         os.makedirs(playlist_dir)
     os.chdir(playlist_dir)
-    saveImg(playlist_cover,'playlist_cover')
+    saveImg(playlist_cover,'playlist_cover.png')
 
     for track in tqdm(result['tracks']['items'], bar_format=bar_format):
-        drawImg(track['track']['name'], track['track']['album']['images'][0]['url'])
+        album_cover = track['track']['album']['images'][0]['url']
+        saveImg(album_cover, 'temp.png')
+        img = Image.open('temp.png')
+        drawImg(img.copy(), track['track']['name'])
+        os.remove('temp.png')
     os.chdir('../')
 
 def search(nature,q):
     valid_types = ['album','artist']
     if nature not in valid_types: print('invalid type') ; return
-    result = sp.search(q=q, type=nature, limit=10)
+    result = sp.search(q=q, type=nature, limit=10) ; os.remove('.cache')
     options = dict()
     for i, option in enumerate(result[nature+'s']['items']):
         if nature == 'album':
@@ -234,7 +250,9 @@ def helper(arg=None):
     if arg == None: print(help_text)
         
 def main():
-    global global_index
+    global session
+    global song_index, lead_zero
+    session = requests.Session()
     commands = {
         'album':getalbum,
         'artist':getartist,
@@ -244,7 +262,7 @@ def main():
         'help':helper
     }
     while True:
-        global_index = 1
+        song_index = [0,0] ; lead_zero = [0,0]
         user_input = shlex.split(input('> '))
         if user_input[0] in commands:
             try: commands[user_input[0]](*user_input[1:])
