@@ -28,6 +28,10 @@ config = {
     'choose_albums':True,
     'artist_subfolders':False}
 
+languages = {
+    '[\u3040-\u30ff]':'NotoSansJP-Medium.otf',
+    '[\u4E00-\u9FFF]':'NotoSansSC-Medium.otf'}
+
 help_text = '''
     COMMANDS
 
@@ -83,25 +87,35 @@ def saveImg(link,name):
 
 def drawImg(img,text):
     index = ''
-    if not config['artist_subfolders']:
-        if song_index[0] > 0:
-            for i in range(0,2):
-                index += f'{str(song_index[i]).zfill(math.floor(math.log10(lead_zero[i]))+1)}-'
+    if not config['artist_subfolders'] and song_index[0] > 0:
+        index += f'{str(song_index[0]).zfill(math.floor(math.log10(lead_zero[0]))+1)}-'
+    index += f'{str(song_index[1]).zfill(math.floor(math.log10(lead_zero[1]))+1)}-'
     if config['remove_tags'] == True: text = removeTags(text)
     
     fileName = slugify(text)
-    # text fitting settings
-    fontSize = 100
+    if fileName == '': fileName = 'img'
+    
+    # select font based on language
+    fontName = 'NotoSansDisplay-Medium.ttf'
+    for lang in languages:
+        if re.search(lang, text):
+            fontName = languages[lang]
+            break
+
+    # text fitting
+    fontSize = 100 ; max_char_count = 10
     while True:
+        text = textwrap.fill(text=text, width=max_char_count)
         fontSize -= 4
-        font = ImageFont.truetype(f'{parent_dir}/vendor/SourceCodePro-Bold.ttf',fontSize)
-        avg_char_width = sum(font.getsize(char)[0] for char in ascii_letters) / len(ascii_letters)
-        max_char_count = int((img.size[0] * .95)/avg_char_width)
-        if max_char_count >= 10: break
+        font = ImageFont.truetype(f'{parent_dir}/fonts/{fontName}',fontSize)
+        for line in text.split('\n'):
+            if font.getsize(line)[0] > img.size[0]*.95: break
+        else: break
+        if fontSize < 88: fontSize = 100 ; max_char_count -= 1
+    
     # draw image and save
-    text = textwrap.fill(text=text, width=max_char_count)
     draw = ImageDraw.Draw(img)
-    draw.multiline_text(xy=(img.size[0]/2, img.size[1]/2), text=text, font=font, fill='white', anchor='mm', align='center',stroke_width=int(fontSize/10), stroke_fill='black')
+    draw.multiline_text(xy=(img.size[0]/2, img.size[1]/2), text=text, font=font, fill='white', anchor='mm', align='center',stroke_width=int(fontSize/13), stroke_fill='black')
     img.save(f'./{index}{fileName}.png')
 
 def getalbum(album_id,create_dir=True):
@@ -113,7 +127,9 @@ def getalbum(album_id,create_dir=True):
     if config['only_cover'] == True: saveImg(album_cover,f'{slugify(album_name)}.png') ; return
 
     if create_dir == True:
-        album_dir = f'./{slugify(album_name)}'
+        album_dir = slugify(album_name)
+        if album_dir == '': album_dir = 'album'
+        album_dir = f'./{album_dir}'
         if not os.path.exists(album_dir):
             os.makedirs(album_dir)
         os.chdir(album_dir)
@@ -133,7 +149,9 @@ def getartist(artist_id):
     artist_name = result['name']
     artist_pfp = result['images'][0]['url']
     
-    artist_dir = f'./{slugify(artist_name)}'
+    artist_dir = slugify(artist_name)
+    if artist_dir == '': artist_dir = 'album'
+    artist_dir = f'./{artist_dir}'
     if not os.path.exists(artist_dir):
         os.makedirs(artist_dir)
     os.chdir(artist_dir)
@@ -185,6 +203,7 @@ def getartist(artist_id):
     os.chdir('../')
 
 def getplaylist(playlist_id):
+    global song_index, lead_zero
     result = sp.playlist(playlist_id) ; os.remove('.cache')
     playlist_name = result['name']
     playlist_cover = result['images'][0]['url']
@@ -195,7 +214,9 @@ def getplaylist(playlist_id):
     os.chdir(playlist_dir)
     saveImg(playlist_cover,'playlist_cover.png')
 
+    lead_zero[1] = len(result['tracks']['items'])
     for track in tqdm(result['tracks']['items'], bar_format=bar_format):
+        song_index[1] += 1
         album_cover = track['track']['album']['images'][0]['url']
         saveImg(album_cover, 'temp.png')
         img = Image.open('temp.png')
@@ -206,7 +227,7 @@ def getplaylist(playlist_id):
 def search(nature,q):
     valid_types = ['album','artist']
     if nature not in valid_types: print('invalid type') ; return
-    result = sp.search(q=q, type=nature, limit=10) ; os.remove('.cache')
+    result = sp.search(q=q, type=nature, limit=5) ; os.remove('.cache')
     options = dict()
     for i, option in enumerate(result[nature+'s']['items']):
         if nature == 'album':
@@ -231,27 +252,20 @@ def search(nature,q):
 
 def configs(opt=None):
     if opt in config:
-        if config[opt] == True: config[opt] = False
-        elif config[opt] == False: config[opt] = True
-        #else: config[opt] == arg
-        if config[opt] == True: color = colors.GREEN
-        elif config[opt] == False: color = colors.RED
-        else: color = colors.YELLOW
+        if config[opt] == True: config[opt] = False ; color = colors.RED
+        elif config[opt] == False: config[opt] = True ; color = colors.GREEN
         print(f'{opt}: {color}{config[opt]}{colors.END}')
     else: 
         for opt in config:
             if config[opt] == True: color = colors.GREEN
             elif config[opt] == False: color = colors.RED
-            else: color = colors.YELLOW
             print(f'{opt}: {color}{config[opt]}{colors.END}')
-    return
 
 def helper(arg=None):
     if arg == None: print(help_text)
         
 def main():
-    global session
-    global song_index, lead_zero
+    global session, song_index, lead_zero
     session = requests.Session()
     commands = {
         'album':getalbum,
